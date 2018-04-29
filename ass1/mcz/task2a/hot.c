@@ -52,7 +52,8 @@ int main(int argc, char *argv[])
 	// -----------------------------------------------------------[Para check]--
 
 	int needToTerminate = checkParameters(my_rank, argc, argv);
-	terminateIfNeededSilently(needToTerminate);
+	
+	//terminateIfNeededSilently(needToTerminate);
 
 	// -----------------------------------------------------------------[Main]--
 
@@ -248,6 +249,9 @@ int checkParameters(int my_rank, int argc, char *argv[])
 			}
 		}
 	}
+	if(terminate==1){
+		exit(0);
+	}
 	return terminate;
 }
 
@@ -274,5 +278,8 @@ int terminateIfNeeded(int terminate)
  */
 int terminateIfNeededSilently(int terminate)
 {
-	exit(0);
+	if (terminate == 1)
+	{
+		exit(0);
+	}
 }
