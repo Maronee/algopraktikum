@@ -1,6 +1,6 @@
 # algopraktikum
 <div>
-<IMG title="Stay cool! :)" alt="Orignal Ressource: http://vignette2.wikia.nocookie.net/fallout/images/b/bf/Vault_Boy_Dock_Icon_by_oloff3.png/revision/20110820161751" style="float: right;margin-left: 10px;" align="right" alt="Banner" border="0" src="https://github.com/FutureApp/stream-processing/raw/master/zzpics/FallOutBoy.png">
+<IMG title="Stay cool! :)" alt="Orignal Ressource: http://vignette2.wikia.nocookie.net/fallout/images/b/bf/Vault_Boy_Dock_Icon_by_oloff3.png/revision/20110820161751" style="float: right;margin-left: 10px;" align="right" alt="Banner" border="0" src="https://github.com/FutureApp/zzpics/blob/master/FallOutBoy.png">
 <p>
 Let's tackle it!
   <br>
