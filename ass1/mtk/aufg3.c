@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 	getRandom();
 	//mpirun();
 
-
+	return 0;
 
 }
 
@@ -52,7 +52,7 @@ int* getRandom() {
 
 			for ( i = 0; i < m; ++i) {
 //				  r[i] = rand();
-				r[i] = 3;
+				r[i] = 10;
 				b[2]+=r[i];
 				  if (r[i] > max)
 				              {
@@ -76,38 +76,39 @@ int* getRandom() {
 			printf( "b[%d] = %d\n", 3, b[3]);
 //			return b;
 
-			int *received;
-			int *send;
+			int received[4];
+			int send[4];
 
 
 			int j;
 			for( j = 0; j <= world_size; j = j + 1 ){
 						if (my_rank==0){
-							MPI_Recv(&received, 4, MPI_INT, world_size, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+							MPI_Recv(&received, 4, MPI_INT, world_size-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //worldsize
 
 										if (b[0]>=received[0]) {  //maximum from both arrays
 											send[0]=b[0];
+											printf("Schleife0");
 											}
 											else{
 												send[0]=received[0];
 											}
-											if (b[1]>=received[1]) {  //minimum from both arrays
+										if (b[1]>=received[1]) {  //minimum from both arrays
 													send[1]=received[1];
-												}
-												else{
-													send[1]=b[1];
-												}
-											send[2]=(b[2]+received[2]);
-											send[3]=(b[3]+received[3])/2;
-
-										MPI_Send(&send, 4, MPI_INT, my_rank +1, 1, MPI_COMM_WORLD);
+											}
+											else{
+												send[1]=b[1];
+											}
+										send[2]=(b[2]+received[2]);
+										send[3]=(b[3]+received[3])/2;
+										MPI_Send(&send, 4, MPI_INT, my_rank+1, 1, MPI_COMM_WORLD); //my_rank +1
 
 							}
-						if (my_rank==world_size){
-							MPI_Recv(&received, 4, MPI_INT, my_rank -1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+						if (my_rank==world_size-1){
+							MPI_Recv(&received, 4, MPI_INT, my_rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //my_rank -1
 
 										if (b[0]>=received[0]) {  //maximum from both arrays
 											send[0]=b[0];
+											printf("Schleife1");
 											}
 											else{
 												send[0]=received[0];
@@ -120,14 +121,14 @@ int* getRandom() {
 												}
 											send[2]=(b[2]+received[2]);
 											send[3]=(b[3]+received[3])/2;
-
-										MPI_Send(&send, 4, MPI_INT, 0, 1, MPI_COMM_WORLD);
+										MPI_Send(&send, 4, MPI_INT, 0, 1, MPI_COMM_WORLD); //0
 						}
 						else{
-							MPI_Recv(&received, 4, MPI_INT, my_rank -1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+							MPI_Recv(&received, 4, MPI_INT, my_rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //my_rank -1
 
 										if (b[0]>=received[0]) {  //maximum from both arrays
 											send[0]=b[0];
+											printf("Schleife2");
 											}
 											else{
 												send[0]=received[0];
@@ -140,8 +141,7 @@ int* getRandom() {
 												}
 											send[2]=(b[2]+received[2]);
 											send[3]=(b[3]+received[3])/2;
-
-										MPI_Send(&send, 4, MPI_INT, my_rank +1, 1, MPI_COMM_WORLD);
+										MPI_Send(&send, 4, MPI_INT, my_rank+1, 1, MPI_COMM_WORLD); //my_rank +1
 						}
 					}
 
@@ -149,7 +149,7 @@ int* getRandom() {
 
 
 
-
+			MPI_Finalize(); // finalizing MPI interface
 
 
 }
