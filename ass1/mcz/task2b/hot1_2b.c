@@ -1,7 +1,7 @@
 /***********************************************************************
  Program: hellomp.c                                                  
- Author: Michael Czaja, xxxxxxx                                           
- matriclenumber: 4293033                                             
+ Author: Michael Czaja, Muttaki Aslanparcasi                                           
+ matriclenumber: 4293033, 5318807                                             
  Assignment : 1                                                      
  Task: 2                                                             
  Parameters: no                                                      
@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 	int mesCommline = 99999;
 
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
+	 
 	char buffer[(MAX_BUFFER_SIZE * world_size) + MPI_BSEND_OVERHEAD];
 	int bsize = sizeof(buffer);
 
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 	int needToTerminate = checkParameters(my_rank, argc, argv);
 
 	// ---------------------------------------------------------[ Data Create ]--
-
+	double starttime = MPI_Wtime();
 	int myNumbers[mValue];
 	int neighNumbers[mValue];
 	int *total = malloc(mValue * 2 * sizeof(int)); // array to hold the result
@@ -187,10 +187,13 @@ int main(int argc, char *argv[])
 	}
 
 	// ----------------------------------------------------------[Result Call]--
+	double endtime;
+	endtime=MPI_Wtime();
+	double resulttime=endtime-starttime;
 	otPrint(0, my_rank, "RESULT:\n");
 	otPrint(0, my_rank, "(ExitRound|Node|NodeListOfNumbers)\n");
 	printRoundStartValues(my_rank, 0, myNumbers, mValue);
-
+	printf("elapsed Time: %lf\n", resulttime);
 	//-----------------------------------------------------------------[ END ]--
 	MPI_Buffer_detach((void *)buffer, &bsize);
 	MPI_Finalize(); // finalizing MPI interface

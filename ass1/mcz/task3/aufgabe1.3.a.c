@@ -22,6 +22,7 @@
 #include <string.h> // import of the definitions of the string operations
 #include <unistd.h> // standard unix io library definitions and declarations
 #include <errno.h>  // system error numbers
+#include <time.h>
 
 #include <stdlib.h>
 
@@ -49,6 +50,7 @@ int commLine = 9999;
 
 int main(int argc, char *argv[])
 {
+	clock_t begin=clock();
 	// -----------------------------------------------------------------[Init]--
 	int namelen;							 // length of name
 	int my_rank;							 // rank of the process
@@ -130,19 +132,28 @@ int main(int argc, char *argv[])
 
 	if (my_rank == 0)
 	{
+		double starttime1 = MPI_Wtime();
 		MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank + 1, round, MPI_COMM_WORLD);
 		MPI_Recv(&dataToRev, 3, MPI_DOUBLE, world_size - 1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		
+		double endtime1 = MPI_Wtime();
+
 		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
 		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
 		double combinedSum = dataToSend[2]+dataToRev[2];
 		dataToSend[0] = taskLookForMin(combinedMin,2);
 		dataToSend[1] = taskLookForMax(combinedMax,2);
 		dataToSend[2] = combinedSum;
+
+		printf("Communication time: %lf  ", endtime1-starttime1);
+		//TODO Bug letztes element wir doppelt gezählt check woran das liegt.
 	}
 	else if (my_rank == world_size - 1)
 	{
+		
+		double starttime2=MPI_Wtime();
 		MPI_Recv(&dataToRev, 3, MPI_DOUBLE, my_rank-1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		double endtime2=MPI_Wtime();// endeTime2
+		// time2= endeTime2-startTime2
 
 		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
 		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
@@ -151,17 +162,29 @@ int main(int argc, char *argv[])
 		dataToSend[1] = taskLookForMax(combinedMax,2);
 		dataToSend[2] = combinedSum;
 		resultAVG = dataToSend[2]/mValue;
+		
+		double starttime3=MPI_Wtime();
 		MPI_Send(&dataToSend, 3, MPI_DOUBLE, 0, round, MPI_COMM_WORLD);
+		double endtime3=MPI_Wtime();//endeTime3
+		double resulttime3= (endtime2-starttime2)+ (endtime3-starttime3);
+
+		printf("Communication time: %lf  ", resulttime3);
 	}
 	else{
+		double starttime4= MPI_Wtime();
 		MPI_Recv(&dataToRev, 3, MPI_DOUBLE, my_rank-1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		double endtime4=MPI_Wtime();
 		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
 		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
 		double combinedSum = dataToSend[2]+dataToRev[2];
 		dataToSend[0] = taskLookForMin(combinedMin,2);
 		dataToSend[1] = taskLookForMax(combinedMax,2);
 		dataToSend[2] = combinedSum;
+		double starttime5=MPI_Wtime();
 		MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank+1, round, MPI_COMM_WORLD);
+		double endtime5=MPI_Wtime();
+		double resulttime4= (endtime4- starttime4)+ (endtime5-starttime5);
+		printf("Communication time: %lf  ", resulttime4);
 
 	}
 	}
@@ -194,6 +217,9 @@ int main(int argc, char *argv[])
 
 	MPI_Buffer_detach((void *)buffer, &bsize);
 	MPI_Finalize(); // finalizing MPI interface
+	clock_t end=clock();
+	double time_spent = (double)(end - begin)/CLOCKS_PER_SEC;
+	printf("Seq. elapsed Time: %lf\n", time_spent);
 	return 0;		// end of progam with exit code 0
 }
 

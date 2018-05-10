@@ -1,7 +1,7 @@
 /************************************************************************/
 /* Program: hellomp.c                                                   */
-/* Author: Michael Czaja, xx                                            */
-/* matriclenumber: 4293033                                              */
+/* Author: Michael Czaja, Muttaki Aslanparcasi                          */
+/* matriclenumber: 4293033, 5318807                                     */
 /* Assignment : 1                                                       */
 /* Task: 1                                                              */
 /* Parameters: no                                                       */
