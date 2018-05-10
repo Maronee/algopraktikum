@@ -1,7 +1,7 @@
 /***********************************************************************
  Program: aufgabe1.3.b.c                                                  
- Author: Michael Czaja, xxxxxxx                                           
- matriclenumber: 4293033                                             
+ Author: Michael Czaja, Muttaki Aslanparcasi                                           
+ matriclenumber: 4293033, 5318807                                            
  Assignment : 1                                                      
  Task: 3                                                             
  Parameters: yes -m (amount of numbers to generate)                                                      
@@ -28,7 +28,6 @@
 #include <math.h>
 
 #define MAX_BUFFER_SIZE 1000
-
 int utilCheckParameters(int my_rank, int argc, char *argv[]);
 int utilTerminateIfNeeded(int terminate);
 int rootGetAndPrintNodeRandInRingMode(char tag[], int commLine, int myRank,
@@ -36,7 +35,7 @@ int rootGetAndPrintNodeRandInRingMode(char tag[], int commLine, int myRank,
 
 double taskLookForMin(double myInitNumbers[], int size);
 double taskLookForMax(double myInitNumbers[], int size);
-double taskCalcMax(double myInitNumbers[], int size);
+double taskCalcSum(double myInitNumbers[], int size);
 double taskCalcAVG(double number, int amount);
 
 int utilTerminateIfNeededSilently(int terminate);
@@ -101,21 +100,19 @@ int main(int argc, char *argv[])
 
 	double myMinValue = taskLookForMin(myInitNumbers, mValue);
 	double myMaxValue = taskLookForMax(myInitNumbers, mValue);
-	double mySUMValue = taskCalcMax(myInitNumbers, mValue);
-
+	double mySUMValue = taskCalcSum(myInitNumbers, mValue);
 	double myAVGValue = taskCalcAVG(mySUMValue, mValue);
 	double resultAVG = -1;
 
 	printf("Min for array <%lf>\n", myMinValue);
 	printf("Max for array <%lf>\n", myMaxValue);
-	
 	printf("SUM for array <%lf>\n", mySUMValue);
 	printf("AVG for array <%lf>\n", myAVGValue);
 
 	dataToSend[0] = myMinValue;
 	dataToSend[1] = myMaxValue;
 	dataToSend[2] = mySUMValue;
-	// ----------------------------------------------------------------[ Main ]--
+	// -----------------------------------------------------------[ pre Init ]--
 
 	char *c, proc_name[MPI_MAX_PROCESSOR_NAME + 1]; // hostname
 
@@ -131,7 +128,6 @@ int main(int argc, char *argv[])
 
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	int roundsToPlay = taskCalcHowManyRound(world_size);
-	printf("ROUND for coms (%d)\n", roundsToPlay);
 
 	// ------------------------------------------------------------[Para Part]--
 	double mpi_loopStart = MPI_Wtime();
@@ -145,8 +141,9 @@ int main(int argc, char *argv[])
 		{
 			if (didISend == 1)
 			{
-				// printf("Nothing to do (%d) \n",my_rank);
+				// Nothing to do
 			}
+			// node is receiver.
 			else
 			{
 				double mpi_comStart = MPI_Wtime();
@@ -163,6 +160,7 @@ int main(int argc, char *argv[])
 				printf("%d <-  %d\n", my_rank, partner);
 			}
 		}
+		// node is sender.
 		else
 		{
 			if (didISend == 0)
@@ -206,81 +204,89 @@ int main(int argc, char *argv[])
 	//-----------------------------------------------------------------[ END ]--
 	MPI_Barrier(MPI_COMM_WORLD);
 	usleep(100);
-	
 	MPI_Buffer_detach((void *)buffer, &bsize);
-	MPI_Barrier(MPI_COMM_WORLD);
-
 	MPI_Finalize(); // finalizing MPI interface
 	
 	//----------------------------------------------------------------[ Mes. ]--
 	printf("<%d> <%lf> <%lf> <%1f> <%1f>         |\n", my_rank, mpi_programRuntime, mpi_timeInLoop, mpi_timeInCom, (mpi_programRuntime-mpi_timeInLoop));
 
-	//printf("%d, total")
-	//printf("<%d> <%lf> <%lf> <%lf> <%lf> | <%lf> <%lf> <%lf> <%lf> \n",my_rank,time_spent, resulttime, myCommuTime, (time_spent - resulttime), MPI_Program_Runtime, time_inParaLoop, myCommuTimeProcess, (MPI_Program_Runtime  - resulttime));
-
 	return 0; // end of progam with exit code 0
 }
 
 // ------------------------------------------------------------------[ TaskFunc. ]--
+
 /**
- * @brief 
+ * @brief Check for the minimum in an array.
  * 
- * @param myInitNumbers 
- * @param size 
- * @return double 
+ * @param array The array.
+ * @param size Size of array.
+ * @return double The minimum of the array.
  */
-double taskLookForMin(double myInitNumbers[], int size)
+double taskLookForMin(double array[], int size)
 {
-	double result = myInitNumbers[0];
+	double result = array[0];
 
 	for (int i = 0; i < size; i++)
 	{
-		if (result > myInitNumbers[i])
-			result = myInitNumbers[i];
+		if (result > array[i])
+			result = array[i];
 	}
 
 	return result;
 }
 
 /**
- * @brief 
+ * @brief Check for the maximum in an array.
  * 
- * @param myInitNumbers 
- * @param size 
- * @return double 
+ * @param array The array.
+ * @param size Size of array.
+ * @return double The maximum of the array.
  */
-double taskLookForMax(double myInitNumbers[], int size)
+double taskLookForMax(double array[], int size)
 {
-	double result = myInitNumbers[0];
+	double result = array[0];
 
 	for (int i = 0; i < size; i++)
 	{
-		if (result < myInitNumbers[i])
-			result = myInitNumbers[i];
+		if (result < array[i])
+			result = array[i];
 	}
 
 	return result;
 }
 
+
 /**
- * Checks if a given number is a power 2.
- * 1 if so. 
- * */
+ * @brief Checks if a number is a power of 2.
+ * 
+ * @param x Number
+ * @return int 1 if so.
+ */
 int taskIspowerof2(unsigned int x)
 {
 	return x && !(x & (x - 1));
 }
 
+/**
+ * @brief Calcs the communications-rounds.
+ * 
+ * @param sizeOfWorld Size of the world(# nodes).
+ * @return int Number of rounds to communicate.
+ */
 int taskCalcHowManyRound(int sizeOfWorld)
 {
 	int rounds = log(sizeOfWorld) / log(2);
 	return rounds;
 }
 
-int taskCalcMyPartnerRank(int myRank, int round)
-{
-}
 
+/**
+ * @brief Checks if node is sender or receiver.
+ * 
+ * @param myRank Rank of the node.
+ * @param partnerRank Rank of the partner-node.
+ * @return int 1 if node is sender.
+ */
 int taskAmISender(int myRank, int partnerRank)
 {
 	int send = -1;
@@ -292,29 +298,29 @@ int taskAmISender(int myRank, int partnerRank)
 }
 
 /**
- * @brief 
+ * @brief Calcs the sum of a given array.
  * 
- * @param myInitNumbers 
- * @param size 
- * @return double 
+ * @param array The array.
+ * @param size Size of array.
+ * @return double The sum of the array.
  */
-double taskCalcMax(double myInitNumbers[], int size)
+double taskCalcSum(double array[], int size)
 {
 	double result = 0;
 
 	for (int i = 0; i < size; i++)
 	{
-		result += myInitNumbers[i];
+		result += array[i];
 	}
 
 	return result;
 }
 /**
- * @brief 
+ * @brief  Calcs the avg.
  * 
- * @param number 
- * @param amount 
- * @return double 
+ * @param number Number.
+ * @param amount how many numbers are used.
+ * @return double The avg.
  */
 double taskCalcAVG(double number, int amount)
 {
@@ -323,25 +329,12 @@ double taskCalcAVG(double number, int amount)
 
 // ------------------------------------------------------------------[ UTILS ]--
 
-void utilPrintResultBySendingThemToRoot(int rank, int array[])
-{
-	MPI_Barrier(MPI_COMM_WORLD);
-	usleep(100);
-	if (rank == 0)
-	{
-		printf("Result: ");
-	}
-	for (int i = 0; i < world_size; i++)
-	{
-		MPI_Barrier(MPI_COMM_WORLD);
-		if (rank == i)
-			utilPrintArray(array, mValue);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	usleep(100);
-	printf("\n");
-}
-
+/**
+ * @brief Prints and array.
+ * 
+ * @param array The array.
+ * @param size Size of array.
+ */
 void utilPrintArray(double array[], int size)
 {
 	int index;
@@ -353,7 +346,7 @@ void utilPrintArray(double array[], int size)
 
 /**
  * @brief
- * Checks if all parameters are given and sets them globally for the flowing execution.
+ * Checks if all parameters are given and sets them globally for the following execution.
  * If -h tag is detacted then a help-message will be printend and the execution will be stopped.
  *
  * Returns 1 if -h is found.
@@ -447,6 +440,13 @@ void utilOTPrint(int rankWhichPrints, int my_rank, char message[])
 	}
 }
 
+/**
+ * @brief Prints message. Message contains the node-rank.
+ * 
+ * @param rankWhichPrints Node, which should print.
+ * @param my_rank rank of the node.
+ * @param message  message to print.
+ */
 void utilOTPrintWRank(int rankWhichPrints, int my_rank, char message[])
 {
 	if (my_rank == rankWhichPrints)
@@ -472,7 +472,7 @@ int utilTerminateIfNeeded(int terminate)
 
 /**
  * @brief 
- * Canceled the program-execution if needed.
+ * Aborts the program-execution if needed.
  * 
  * @param terminate 1- to stop execution.
  */
@@ -483,7 +483,11 @@ int utilTerminateIfNeededSilently(int terminate)
 		exit(0);
 	}
 }
-
+/**
+ * @brief Prints the help-message.
+ * 
+ * @return int 0 if successful.
+ */
 int utilPrintHelp()
 {
 	utilOTPrint(0, my_rank, "\n");
@@ -495,4 +499,5 @@ int utilPrintHelp()
 	utilOTPrint(0, my_rank, "Parameter* -m <number>: Specifies the amount of randome numbers each process need to generate.\n");
 	utilOTPrint(0, my_rank, "\n");
 	utilOTPrint(0, my_rank, "\n");
+	return 0;
 }
