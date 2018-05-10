@@ -1,0 +1,1 @@
+mpicc -o app ./aufgabe1.3.b.c  && mpiexec -f ./hosts  -n 16  ./app -m 3

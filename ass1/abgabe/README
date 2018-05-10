@@ -1,0 +1,24 @@
+Example calls:
+
+Start task 1
+mpicc -o ./task1/app ./task1/hellompi.c  && mpiexec -f ./task1/hosts  -n 4 ./task1/app
+
+-----
+Start task 2a
+mpicc -o ./task2a/app ./task2a/hot.c  && mpiexec -f ./task2a/hosts  -n 4 ./task2a/app
+
+-----
+Start task 2b
+mpicc -o ./task2b/app ./task2b/hot1_2b.c  && mpiexec -f ./task2b/hosts  -n 4 ./task2b/app -m 3
+
+-----
+Start task 3a
+Runs program with n=4 and m=3
+cd task3 && time ./runScriptForMeasurement.sh; cd ..
+
+-----
+Start task 3b
+Runs programm with n=16 and m=3
+cd task3b && time ./runScriptForMeasurement.sh ; cd ..
+
+-----
