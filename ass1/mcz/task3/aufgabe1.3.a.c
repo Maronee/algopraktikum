@@ -140,11 +140,12 @@ int main(int argc, char *argv[])
 		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
 		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
 		double combinedSum = dataToSend[2]+dataToRev[2];
-		dataToSend[0] = taskLookForMin(combinedMin,2);
-		dataToSend[1] = taskLookForMax(combinedMax,2);
-		dataToSend[2] = combinedSum;
+		dataToSend[0] = dataToRev[0];
+		dataToSend[1] = dataToRev[1];
+		dataToSend[2] = dataToRev[2];
+		resultAVG = dataToSend[2]/mValue;
 
-		printf("Communication time: %lf  ", endtime1-starttime1);
+		printf("Node(%d) - Communication time: %lf\n",my_rank, endtime1-starttime1);
 		//TODO Bug letztes element wir doppelt gezählt check woran das liegt.
 	}
 	else if (my_rank == world_size - 1)
@@ -168,7 +169,7 @@ int main(int argc, char *argv[])
 		double endtime3=MPI_Wtime();//endeTime3
 		double resulttime3= (endtime2-starttime2)+ (endtime3-starttime3);
 
-		printf("Communication time: %lf  ", resulttime3);
+		printf("Node(%d) - Communication time: %lf\n",my_rank, resulttime3);
 	}
 	else{
 		double starttime4= MPI_Wtime();
@@ -184,7 +185,7 @@ int main(int argc, char *argv[])
 		MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank+1, round, MPI_COMM_WORLD);
 		double endtime5=MPI_Wtime();
 		double resulttime4= (endtime4- starttime4)+ (endtime5-starttime5);
-		printf("Communication time: %lf  ", resulttime4);
+		printf("Node(%d) - Communication time: %lf\n",my_rank, resulttime4);
 
 	}
 	}
@@ -193,33 +194,35 @@ int main(int argc, char *argv[])
 		
 	}
 	// final avg calc.
-		resultAVG=dataToSend[2]/mValue;
-
+		resultAVG=dataToSend[2] / mValue;
+		
 	/*
 	*/
-
-	// ----------------------------------------------------------[Result Call]--
-	
-		if(my_rank==0){
-			printf("------------------ RESULT -----------\n");
-			printf("Min for array <%lf>\n", dataToSend[0]);
-			printf("Max for array <%lf>\n", dataToSend[1]);
-			printf("SUM for array <%lf>\n", dataToSend[2]);
-			
-			printf("AVG for array <%lf>\n", resultAVG);
-		}
-	//-----------------------------------------------------------------[ END ]--
-
 	double endtime;
 	endtime = MPI_Wtime();
 	double resulttime = endtime - starttime;
-	printf("elapsed Time: %lf\n", resulttime);
+
+	// ----------------------------------------------------------[Result Call]--
+	MPI_Barrier(MPI_COMM_WORLD);
+	usleep(100);
+		if(my_rank==0){
+			printf("------------------ RESULT -----------\n");
+			printf("Min for arrays                            <%lf>\n", dataToSend[0]);
+			printf("Max for arrays                            <%lf>\n", dataToSend[1]);
+			printf("SUM for arrays                            <%lf>\n", dataToSend[2]);
+			
+			printf("AVG for arrays (dep. m-value)             <%lf>\n", resultAVG);
+			printf("AVG for arrays (dep. m-value & worldsize) <%lf>\n", resultAVG/world_size);
+		}
+	//-----------------------------------------------------------------[ END ]--
+
+	printf("Node (%d) - elapsed Time: %lf\n", my_rank, resulttime);
 
 	MPI_Buffer_detach((void *)buffer, &bsize);
 	MPI_Finalize(); // finalizing MPI interface
 	clock_t end=clock();
 	double time_spent = (double)(end - begin)/CLOCKS_PER_SEC;
-	printf("Seq. elapsed Time: %lf\n", time_spent);
+	printf("Node (%d) - Seq. elapsed Time: %lf\n",my_rank, time_spent);
 	return 0;		// end of progam with exit code 0
 }
 
