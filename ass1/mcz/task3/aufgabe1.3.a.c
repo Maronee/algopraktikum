@@ -1,20 +1,20 @@
 /***********************************************************************
- Program: hellomp.c                                                  
+ Program: aufgabe1.3.a.c                                                  
  Author: Michael Czaja, xxxxxxx                                           
  matriclenumber: 4293033                                             
  Assignment : 1                                                      
  Task: 2                                                             
- Parameters: no                                                      
+ Parameters: yes (m-value)                                                      
  Environment variables: no                                           
 
  Description:                                                        
 
- Implements the odd-even tranposition sort - algorithm.               
- First, every computer will generate a random number. After that,
- the number of sequence will be sorted by the network due a simple parallel 
- strategy.
+ Program generates a random set of number (depends on m-value), det the min-value,
+ max-value and calcs the sum + avg-sum values of the set. After that, each node
+ will share his results with the cluster and the overall result will be calculated
+ and printed by the root-node.
 
- Program uses buffered communication.
+ The communication is working over a ring - pattern. 
  /************************************************************************/
 
 #include "mpi.h"	// import of the MPI definitions
@@ -35,7 +35,7 @@ int rootGetAndPrintNodeRandInRingMode(char tag[], int commLine, int myRank,
 
 double taskLookForMin(double myInitNumbers[], int size);
 double taskLookForMax(double myInitNumbers[], int size);
-double taskCalcMax(double myInitNumbers[], int size);
+double taskCalcSum(double myInitNumbers[], int size);
 double taskCalcAVG(double number, int amount);
 
 int utilTerminateIfNeededSilently(int terminate);
@@ -50,17 +50,18 @@ int commLine = 9999;
 
 int main(int argc, char *argv[])
 {
-	clock_t begin=clock();
 	// -----------------------------------------------------------------[Init]--
 	int namelen;							 // length of name
 	int my_rank;							 // rank of the process
 	MPI_Init(&argc, &argv);					 // initializing of MPI-Interface
+	double mpi_programStart = MPI_Wtime();
+	double mpi_timeInCom = 0;
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank); //get your rank
 
 	// init call
 	srand(time(NULL)); // should only be called once
 	int mesCommline = 99999;
-	int round =4;
+	int round = 4;
 
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
@@ -96,12 +97,11 @@ int main(int argc, char *argv[])
 
 	double myMinValue = taskLookForMin(myInitNumbers, mValue);
 	double myMaxValue = taskLookForMax(myInitNumbers, mValue);
-	double mySUMValue = taskCalcMax(myInitNumbers, mValue);
+	double mySUMValue = taskCalcSum(myInitNumbers, mValue);
 
 	double myAVGValue = taskCalcAVG(mySUMValue, mValue);
-	double resultAVG=-1;
+	double resultAVG = -1;
 
-	
 	printf("Min for array <%lf>\n", myMinValue);
 	printf("Max for array <%lf>\n", myMaxValue);
 	printf("SUM for array <%lf>\n", mySUMValue);
@@ -124,115 +124,117 @@ int main(int argc, char *argv[])
 
 	// ------------------------------------------------------------[Init Call]--
 
-	double starttime = MPI_Wtime();
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
 	// ------------------------------------------------------------[Para Part]--
-	if(! (world_size<2)){
-
-	if (my_rank == 0)
+	double mpi_loopStart = MPI_Wtime();
+	if (!(world_size < 2))
 	{
-		double starttime1 = MPI_Wtime();
-		MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank + 1, round, MPI_COMM_WORLD);
-		MPI_Recv(&dataToRev, 3, MPI_DOUBLE, world_size - 1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		double endtime1 = MPI_Wtime();
+		if (my_rank == 0)
+		{
+			double mpi_comStart = MPI_Wtime();
+			MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank + 1, round, MPI_COMM_WORLD);
+			MPI_Recv(&dataToRev, 3, MPI_DOUBLE, world_size - 1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			double mpi_comEnd = MPI_Wtime();
+			mpi_timeInCom += (mpi_comEnd-mpi_comStart);
 
-		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
-		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
-		double combinedSum = dataToSend[2]+dataToRev[2];
-		dataToSend[0] = dataToRev[0];
-		dataToSend[1] = dataToRev[1];
-		dataToSend[2] = dataToRev[2];
-		resultAVG = dataToSend[2]/mValue;
+			double combinedMin[2] = {dataToSend[0], dataToRev[0]};
+			double combinedMax[2] = {dataToSend[1], dataToRev[1]};
+			double combinedSum = dataToSend[2] + dataToRev[2];
+			dataToSend[0] = dataToRev[0];
+			dataToSend[1] = dataToRev[1];
+			dataToSend[2] = dataToRev[2];
+			resultAVG = dataToSend[2] / mValue;
+		}
+		else if (my_rank == world_size - 1)
+		{
 
-		printf("Node(%d) - Communication time: %lf\n",my_rank, endtime1-starttime1);
-		//TODO Bug letztes element wir doppelt gezählt check woran das liegt.
+			double mpi_comStart = MPI_Wtime();
+			MPI_Recv(&dataToRev, 3, MPI_DOUBLE, my_rank - 1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			double mpi_comEnd = MPI_Wtime();
+			mpi_timeInCom += (mpi_comEnd-mpi_comStart);
+
+			double combinedMin[2] = {dataToSend[0], dataToRev[0]};
+			double combinedMax[2] = {dataToSend[1], dataToRev[1]};
+			double combinedSum = dataToSend[2] + dataToRev[2];
+			dataToSend[0] = taskLookForMin(combinedMin, 2);
+			dataToSend[1] = taskLookForMax(combinedMax, 2);
+			dataToSend[2] = combinedSum;
+			resultAVG = dataToSend[2] / mValue;
+
+			mpi_comStart = MPI_Wtime();
+			MPI_Send(&dataToSend, 3, MPI_DOUBLE, 0, round, MPI_COMM_WORLD);
+			mpi_comEnd = MPI_Wtime();
+			mpi_timeInCom += (mpi_comEnd-mpi_comStart);
+		}
+		else
+		{
+			double mpi_comStart = MPI_Wtime();
+			MPI_Recv(&dataToRev, 3, MPI_DOUBLE, my_rank - 1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			double mpi_comEnd = MPI_Wtime();
+			mpi_timeInCom += (mpi_comEnd-mpi_comStart);
+			double combinedMin[2] = {dataToSend[0], dataToRev[0]};
+			double combinedMax[2] = {dataToSend[1], dataToRev[1]};
+			double combinedSum = dataToSend[2] + dataToRev[2];
+			dataToSend[0] = taskLookForMin(combinedMin, 2);
+			dataToSend[1] = taskLookForMax(combinedMax, 2);
+			dataToSend[2] = combinedSum;
+
+			mpi_comStart = MPI_Wtime();
+			MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank + 1, round, MPI_COMM_WORLD);
+			mpi_comEnd = MPI_Wtime();
+			mpi_timeInCom += (mpi_comEnd-mpi_comStart);
+		}
 	}
-	else if (my_rank == world_size - 1)
+	else
 	{
-		
-		double starttime2=MPI_Wtime();
-		MPI_Recv(&dataToRev, 3, MPI_DOUBLE, my_rank-1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		double endtime2=MPI_Wtime();// endeTime2
-		// time2= endeTime2-startTime2
-
-		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
-		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
-		double combinedSum = dataToSend[2]+dataToRev[2];
-		dataToSend[0] = taskLookForMin(combinedMin,2);
-		dataToSend[1] = taskLookForMax(combinedMax,2);
-		dataToSend[2] = combinedSum;
-		resultAVG = dataToSend[2]/mValue;
-		
-		double starttime3=MPI_Wtime();
-		MPI_Send(&dataToSend, 3, MPI_DOUBLE, 0, round, MPI_COMM_WORLD);
-		double endtime3=MPI_Wtime();//endeTime3
-		double resulttime3= (endtime2-starttime2)+ (endtime3-starttime3);
-
-		printf("Node(%d) - Communication time: %lf\n",my_rank, resulttime3);
-	}
-	else{
-		double starttime4= MPI_Wtime();
-		MPI_Recv(&dataToRev, 3, MPI_DOUBLE, my_rank-1, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		double endtime4=MPI_Wtime();
-		double combinedMin[2] = {dataToSend[0],dataToRev[0]};
-		double combinedMax[2] = {dataToSend[1],dataToRev[1]};
-		double combinedSum = dataToSend[2]+dataToRev[2];
-		dataToSend[0] = taskLookForMin(combinedMin,2);
-		dataToSend[1] = taskLookForMax(combinedMax,2);
-		dataToSend[2] = combinedSum;
-		double starttime5=MPI_Wtime();
-		MPI_Send(&dataToSend, 3, MPI_DOUBLE, my_rank+1, round, MPI_COMM_WORLD);
-		double endtime5=MPI_Wtime();
-		double resulttime4= (endtime4- starttime4)+ (endtime5-starttime5);
-		printf("Node(%d) - Communication time: %lf\n",my_rank, resulttime4);
-
-	}
-	}
-	else{
 		printf("Yeah less then 2 node\n");
-		
 	}
 	// final avg calc.
-		resultAVG=dataToSend[2] / mValue;
-		
-	/*
-	*/
-	double endtime;
-	endtime = MPI_Wtime();
-	double resulttime = endtime - starttime;
+	resultAVG = dataToSend[2] / mValue;
+
+	double mpi_loopEnd = MPI_Wtime();
+	double mpi_programEnd = MPI_Wtime();
+	
+	double mpi_timeInLoop = mpi_loopEnd-mpi_loopStart;
+	double mpi_programRuntime = mpi_programEnd -mpi_programStart ;
 
 	// ----------------------------------------------------------[Result Call]--
 	MPI_Barrier(MPI_COMM_WORLD);
 	usleep(100);
-		if(my_rank==0){
-			printf("------------------ RESULT -----------\n");
-			printf("Min for arrays                            <%lf>\n", dataToSend[0]);
-			printf("Max for arrays                            <%lf>\n", dataToSend[1]);
-			printf("SUM for arrays                            <%lf>\n", dataToSend[2]);
-			
-			printf("AVG for arrays (dep. m-value)             <%lf>\n", resultAVG);
-			printf("AVG for arrays (dep. m-value & worldsize) <%lf>\n", resultAVG/world_size);
-		}
+	if (my_rank == 0)
+	{
+		printf("------------------ RESULT -----------\n");
+		printf("Min for arrays                            <%lf>\n", dataToSend[0]);
+		printf("Max for arrays                            <%lf>\n", dataToSend[1]);
+		printf("SUM for arrays                            <%lf>\n", dataToSend[2]);
+
+		printf("AVG for arrays (dep. m-value)             <%lf>\n", resultAVG);
+		printf("AVG for arrays (dep. m-value & worldsize) <%lf>\n", resultAVG / world_size);
+
+		printf("------------ MEASUREMENTS -----------\n");
+		printf("Node totalProTime timeInPara timeForCom timeInSeq       |\n");
+	}
 	//-----------------------------------------------------------------[ END ]--
-
-	printf("Node (%d) - elapsed Time: %lf\n", my_rank, resulttime);
-
+ 	MPI_Barrier(MPI_COMM_WORLD);
+	usleep(100);
 	MPI_Buffer_detach((void *)buffer, &bsize);
 	MPI_Finalize(); // finalizing MPI interface
-	clock_t end=clock();
-	double time_spent = (double)(end - begin)/CLOCKS_PER_SEC;
-	printf("Node (%d) - Seq. elapsed Time: %lf\n",my_rank, time_spent);
-	return 0;		// end of progam with exit code 0
+	
+	//----------------------------------------------------------------[ Mes. ]--
+	printf("<%d> <%lf> <%lf> <%1f> <%1f>         |\n", my_rank, mpi_programRuntime, mpi_timeInLoop, mpi_timeInCom, (mpi_programRuntime-mpi_timeInLoop));
+
+	return 0; // end of progam with exit code 0
 }
 
 // ------------------------------------------------------------------[ TaskFunc. ]--
+
 /**
- * @brief 
+ * @brief Check for the minimum in an array.
  * 
- * @param myInitNumbers 
- * @param size 
- * @return double 
+ * @param array The array.
+ * @param size Size of array.
+ * @return double The minimum of the array.
  */
 double taskLookForMin(double myInitNumbers[], int size)
 {
@@ -248,11 +250,11 @@ double taskLookForMin(double myInitNumbers[], int size)
 }
 
 /**
- * @brief 
+ * @brief Check for the maximum in an array.
  * 
- * @param myInitNumbers 
- * @param size 
- * @return double 
+ * @param array The array.
+ * @param size Size of array.
+ * @return double The maximum of the array.
  */
 double taskLookForMax(double myInitNumbers[], int size)
 {
@@ -268,13 +270,13 @@ double taskLookForMax(double myInitNumbers[], int size)
 }
 
 /**
- * @brief 
+ * @brief Check for the sum in an array.
  * 
- * @param myInitNumbers 
- * @param size 
- * @return double 
+ * @param array The array.
+ * @param size Size of array.
+ * @return double The sum of the array.
  */
-double taskCalcMax(double myInitNumbers[], int size)
+double taskCalcSum(double myInitNumbers[], int size)
 {
 	double result = 0;
 
@@ -286,11 +288,11 @@ double taskCalcMax(double myInitNumbers[], int size)
 	return result;
 }
 /**
- * @brief 
+ * @brief  Calcs the avg.
  * 
- * @param number 
- * @param amount 
- * @return double 
+ * @param number Number.
+ * @param amount how many numbers are used.
+ * @return double The avg.
  */
 double taskCalcAVG(double number, int amount)
 {
@@ -299,31 +301,18 @@ double taskCalcAVG(double number, int amount)
 
 // ------------------------------------------------------------------[ UTILS ]--
 
-void utilPrintResultBySendingThemToRoot(int rank, int array[])
-{
-	MPI_Barrier(MPI_COMM_WORLD);
-	usleep(100);
-	if (rank == 0)
-	{
-		printf("Result: ");
-	}
-	for (int i = 0; i < world_size; i++)
-	{
-		MPI_Barrier(MPI_COMM_WORLD);
-		if (rank == i)
-			utilPrintArray(array, mValue);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	usleep(100);
-	printf("\n");
-}
-
+/**
+ * @brief Prints and array.
+ * 
+ * @param array The array.
+ * @param size Size of array.
+ */
 void utilPrintArray(double array[], int size)
 {
 	int index;
 	for (index = 0; index < size; index++)
 	{
-	printf("<%lf>\n", array[index]);
+		printf("<%lf>\n", array[index]);
 	}
 }
 
@@ -413,7 +402,13 @@ void utilOTPrint(int rankWhichPrints, int my_rank, char message[])
 		printf("%s ", message);
 	}
 }
-
+/**
+ * @brief Prints message. Message contains the node-rank.
+ * 
+ * @param rankWhichPrints Node, which should print.
+ * @param my_rank rank of the node.
+ * @param message  message to print.
+ */
 void utilOTPrintWRank(int rankWhichPrints, int my_rank, char message[])
 {
 	if (my_rank == rankWhichPrints)
@@ -424,9 +419,9 @@ void utilOTPrintWRank(int rankWhichPrints, int my_rank, char message[])
 
 /**
  * @brief 
- * Cancels the program-execution if needed.
+ * Aborts the program-execution if needed.
  * 
- * @param terminate If 1 then stop execution.
+ * @param terminate 1- to stop execution.
  */
 int utilTerminateIfNeeded(int terminate)
 {
@@ -439,7 +434,7 @@ int utilTerminateIfNeeded(int terminate)
 
 /**
  * @brief 
- * Canceled the program-execution if needed.
+ * Aborts the program-execution if needed.
  * 
  * @param terminate 1- to stop execution.
  */
@@ -451,6 +446,11 @@ int utilTerminateIfNeededSilently(int terminate)
 	}
 }
 
+/**
+ * @brief Prints the help-message.
+ * 
+ * @return int 0 if successful.
+ */
 int utilPrintHelp()
 {
 	printf("\n");
