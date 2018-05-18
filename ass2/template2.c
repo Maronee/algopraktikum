@@ -21,8 +21,40 @@ and forwards it.
 #include <string.h> // import of the definitions of the string operations
 #include <unistd.h> // standard unix io library definitions and declarations
 #include <errno.h>  // system error numbers
-
+#include <math.h>
 #include <stdlib.h>
+
+
+
+#define MAX_BUFFER_SIZE 1000
+
+// TASK
+double T(double x);
+double F(double x);
+double G(double x);
+double P(double x);
+double romberg(double f(double), double a, double b, int n, double **R);
+
+int taskIspowerof2(unsigned int x);
+int taskCalcHowManyRound(int sizeOfWorld);
+
+
+// UTIL
+int utilCheckParameters(int my_rank, int argc, char *argv[]);
+int utilTerminateIfNeeded(int terminate);
+int utilTerminateIfNeededSilently(int terminate);
+int utilPrintHelp();
+void utilOTPrint(int rankWhichPrints, int my_rank, char message[]);
+void utilPrintArray(double array[], int size);
+void utilOTPrintWRank(int rankWhichPrints, int my_rank, char message[]);
+
+int world_size;
+int mValue;
+int commLine = 9999;
+int my_rank; // rank of the process
+
+
+
 
 int main(int argc, char *argv[])
 {
@@ -39,7 +71,7 @@ int main(int argc, char *argv[])
 	int bsize = sizeof(buffer);
 
 	// ----------------------------------------------------------[ Para check ]--
-	int needToTerminate = checkParameters(my_rank, argc, argv);
+
 	// -----------------------------------------------------------[ pre Init ]--
 
 	char *c, proc_name[MPI_MAX_PROCESSOR_NAME + 1]; // hostname
@@ -51,16 +83,59 @@ int main(int argc, char *argv[])
 		*c = '\0';
 
 
-
-
-
-
 	// ------------------------------------------------------------[Init Call]--
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
+	int rounds= (log(world_size)/log(2));
+	int n = 1;
+	int i;
+	double **R;
+
+	double taskA=3.8;
+	double taskB=4.0;
+	double diffAandB= taskB-taskA;
+	double chunkSizeOfPro = diffAandB / world_size;
+
+	double myA = chunkSizeOfPro * my_rank;
+	double myB = chunkSizeOfPro * (my_rank +1);
+
+	printf("Me (%d) will calc from (%f) to (%f)\n",my_rank,myA,myB);
+	double resultFunction1 = 100.0;
+	double resultFunction2 = 100.0;
+
+	double F(double), G(double), P(double);
+	R = calloc((n + 1), sizeof(double *));
+	for (i = 0; i <= n; i++)
+		R[i] = calloc((n + 1), sizeof(double));
+
+	
+	resultFunction1 = romberg(G, myA, myB, n, R); 
+	resultFunction2 = romberg(P, myA, myB, n, R); 
 	// ------------------------------------------------------------[Para Part]--
 
-	// YOUR CODE GOES HERE.
+
+	int dataToSend=2;
+	for(int round = rounds-1; round>=0; round--){
+	    int second = (1 << round);
+	    int partnerRank= my_rank ^ second;
+		double dataArrayToSend[2]= {resultFunction1,resultFunction2};
+		double dataArrayToRev[2];
+        printf("ROUND(%d) Me(%d) call Partner(%d)\n", round, my_rank, partnerRank);
+		MPI_Sendrecv(&dataArrayToSend, dataToSend, MPI_DOUBLE, partnerRank, round, &dataArrayToRev, dataToSend, MPI_DOUBLE, partnerRank, round, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		resultFunction1 += dataArrayToRev[0];
+		resultFunction2 += dataArrayToRev[1];
+	}
+
+//	printf("The first function is F(x) = 1/(1 + x)\n");
+
+
+/*	double rombergSolo = romberg(F, 0.0, 2.0, n, R); /*R[3][3] from 0.0 to 2.0 ----->1.099259*/
+/*	double rombergF1to2 = romberg(F, 1.0, 2.0, n, R); /*R[3][3] from 0.0 to 2.0 ----->1.099259*/
+	
+/*	printf("Romsolo %f \n", rombergSolo);
+	printf("Master Res--- %f + %f = %f \n", rombergF0to1, rombergF1to2, rombergF0to1+ rombergF1to2);
+*/
+
+
 
 	// ------------------------------------------------------------[Para Part]--
 	double mpi_programEnd = MPI_Wtime();
@@ -72,79 +147,33 @@ int main(int argc, char *argv[])
 
 	
 	// ----------------------------------------------------------[Result Call]--
+	utilOTPrint(0, my_rank,"--------------------- RESULT\n");
 	MPI_Barrier(MPI_COMM_WORLD);
 	usleep(100);
+	printf("[%d] (A)=%f (B)=%f \n", my_rank, resultFunction1, resultFunction2);
 	/*if (my_rank == 0)
 	{
 		printf("------------------ RESULT -----------\n");
 		printf("Min for arrays                            <%lf>\n", dataToSend[0]);
 		printf("Max for arrays                            <%lf>\n", dataToSend[1]);
-		printf("SUM for arrays                            <%lf>\n", dataToSend[2]);
 
-		printf("AVG for arrays (dep. m-value)             <%lf>\n", resultAVG);
-		printf("AVG for arrays (dep. m-value & worldsize) <%lf>\n", resultAVG / world_size);
-		
 	}
 	*/
-	printf("------------ MEASUREMENTS -----------\n");
+/*	printf("------------ MEASUREMENTS -----------\n");
 	printf("TIME       |\n");
 	printf("<%lf>          |\n", mpi_programEnd -mpi_programStart );
 	//-----------------------------------------------------------------[ END ]--
+	
 	MPI_Barrier(MPI_COMM_WORLD);
 	usleep(100);
+*/
 	MPI_Buffer_detach((void *)buffer, &bsize);
 	MPI_Finalize(); // finalizing MPI interface
-	
-	//----------------------------------------------------------------[ Mes. ]--
-
-	return 0; // end of progam with exit code 0
-
-
     return 0;
 }
 
 
 // ------------------------------------------------------------------[ TaskFunc. ]--
-
-/**
- * @brief Check for the minimum in an array.
- * 
- * @param array The array.
- * @param size Size of array.
- * @return double The minimum of the array.
- */
-double taskLookForMin(double array[], int size)
-{
-	double result = array[0];
-
-	for (int i = 0; i < size; i++)
-	{
-		if (result > array[i])
-			result = array[i];
-	}
-
-	return result;
-}
-
-/**
- * @brief Check for the maximum in an array.
- * 
- * @param array The array.
- * @param size Size of array.
- * @return double The maximum of the array.
- */
-double taskLookForMax(double array[], int size)
-{
-	double result = array[0];
-
-	for (int i = 0; i < size; i++)
-	{
-		if (result < array[i])
-			result = array[i];
-	}
-
-	return result;
-}
 
 
 /**
@@ -171,52 +200,6 @@ int taskCalcHowManyRound(int sizeOfWorld)
 }
 
 
-/**
- * @brief Checks if node is sender or receiver.
- * 
- * @param myRank Rank of the node.
- * @param partnerRank Rank of the partner-node.
- * @return int 1 if node is sender.
- */
-int taskAmISender(int myRank, int partnerRank)
-{
-	int send = -1;
-	if (myRank > partnerRank)
-		send = 1;
-	else
-		send = 0;
-	return send;
-}
-
-/**
- * @brief Calcs the sum of a given array.
- * 
- * @param array The array.
- * @param size Size of array.
- * @return double The sum of the array.
- */
-double taskCalcSum(double array[], int size)
-{
-	double result = 0;
-
-	for (int i = 0; i < size; i++)
-	{
-		result += array[i];
-	}
-
-	return result;
-}
-/**
- * @brief  Calcs the avg.
- * 
- * @param number Number.
- * @param amount how many numbers are used.
- * @return double The avg.
- */
-double taskCalcAVG(double number, int amount)
-{
-	return number / amount;
-}
 
 // ------------------------------------------------------------------[ UTILS ]--
 
@@ -328,7 +311,7 @@ void utilOTPrint(int rankWhichPrints, int my_rank, char message[])
 {
 	if (my_rank == rankWhichPrints)
 	{
-		printf("%s ", message);
+		printf("%s", message);
 	}
 }
 
@@ -392,4 +375,75 @@ int utilPrintHelp()
 	utilOTPrint(0, my_rank, "\n");
 	utilOTPrint(0, my_rank, "\n");
 	return 0;
+}
+
+
+
+
+
+
+double F(double x) {
+	return (1.0 / (1.0 + x));
+}
+
+double T(double x) {
+	return 1.0;
+}
+
+double G(double x) {
+	return (log(7 * x) / x);
+}
+
+double P(double x) {
+	double xx = (3 * x) + 2;
+	double result = sqrt(xx);
+	return result;
+}
+
+double romberg(double f(double), double a, double b, int n, double **R) //Hier MPI_Bcast fuer die Grenzen l(a)-r(b)
+{
+	int i, j, k;
+	double h, sum;
+	h = b - a;
+	R[1][1] = 0.5 * h * (f(a) + f(b));
+	printf(" Rs[1][1] = %f\n", R[1][1]);
+	for (i = 2; i <= n; i++) {
+		h = (b-a)*pow(2,1-i);
+//		h *= 0.5;
+		sum = 0;
+		for (k = 1; k <= pow(2, i-2); k += 1) {
+			sum += f(a + ((2*k)-1) * h);
+		}
+		R[i][1] = 0.5 * R[i - 1][1] + sum * h; //Inidizes vertauscht?!
+		for (j = 1; j <= i; j++) {
+			R[i][j+1] = R[i][j] + (R[i][j] - R[i - 1][j])
+					/ (pow(4, j) - 1);
+			//printf("Ende -> R[%d][%d] = %f\n", i, j, R[i][j]);
+		}
+		//printf("{ Give That to other process %d / %d} R[%d][0] = %1f\n", i, n,
+		//		i, R[i][1]);
+	}
+	//printf("My result for integral: R[%d][%d] -- %f\n\n", n, n, R[n][n]);
+	double toReturn = R[n][n];
+	return toReturn;
+	/*int ns = 10;
+	double myA = 0;
+	double myB = 1;
+	double **T;
+	for (int var = 0; var < ns; ++var) {
+		for (int b = 0; b < ns; ++b) {
+			R[var][b] = 0;
+		}
+	}
+
+	T = calloc((ns + 1), sizeof(double *));
+	for (i = 0; i <= ns; i++)
+		T[i] = calloc((ns + 1), sizeof(double));
+	for (int myI = 0; myI < ns; ++myI) {
+		for (int myJ = 0; myJ < ns; ++myJ) {
+			printf("T[%d][%d] -- %f\n", myI, myJ, T[myI, myJ]);
+		}
+	}
+	*/
+
 }

@@ -14,7 +14,7 @@
 double F(double x);
 double G(double x);
 double P(double x);
-void romberg(double f(double), double a, double b, int n, double **R);
+double romberg(double f(double), double a, double b, int n, double **R);
 
 double F(double x) {
 	return (1.0 / (1.0 + x));
@@ -30,17 +30,14 @@ double P(double x) {
 	return result;
 }
 
-void romberg(double f(double), double a, double b, int n, double **R) //Hier MPI_Bcast für die Grenzen l(a)-r(b)
+double romberg(double f(double), double a, double b, int n, double **R) //Hier MPI_Bcast fuer die Grenzen l(a)-r(b)
 {
 	int i, j, k;
 	double h, sum;
-
 	h = b - a;
 	R[1][1] = 0.5 * h * (f(a) + f(b));
-	printf(" R[1][1] = %f\n", R[1][1]);
-
+	printf(" Rs[1][1] = %f\n", R[1][1]);
 	for (i = 2; i <= n; i++) {
-
 		h = (b-a)*pow(2,1-i);
 //		h *= 0.5;
 		sum = 0;
@@ -57,7 +54,8 @@ void romberg(double f(double), double a, double b, int n, double **R) //Hier MPI
 				i, R[i][1]);
 	}
 	printf("My result for integral: R[%d][%d] -- %f\n\n", n, n, R[n][n]);
-
+	double toReturn = R[n][n];
+	return toReturn;
 	/*int ns = 10;
 	double myA = 0;
 	double myB = 1;
@@ -81,7 +79,7 @@ void romberg(double f(double), double a, double b, int n, double **R) //Hier MPI
 }
 
 int main(void) {
-	int n = 10;
+	int n = 16;
 	int i;
 	double **R;
 	double F(double), G(double), P(double);
@@ -90,10 +88,17 @@ int main(void) {
 	for (i = 0; i <= n; i++)
 		R[i] = calloc((n + 1), sizeof(double));
 	printf("The first function is F(x) = 1/(1 + x)\n");
-	romberg(F, 0.0, 2.0, 3, R);
-	printf("The second function is G(x) = log(7x)/x\n");
+
+	double rombergSolo = romberg(F, 0.0, 2.0, 16, R); /*R[3][3] from 0.0 to 2.0 ----->1.099259*/
+	double rombergF0to1 = romberg(F, 0.0, 1.0, 8, R); /*R[3][3] from 0.0 to 2.0 ----->1.099259*/
+	double rombergF1to2 = romberg(F, 1.0, 2.0, 8, R); /*R[3][3] from 0.0 to 2.0 ----->1.099259*/
+
+	printf("Romsolo %f \n", rombergSolo);
+	printf("Master Res--- %f + %f = %f \n", rombergF0to1, rombergF1to2, rombergF0to1+ rombergF1to2);
+	/*printf("The second function is G(x) = log(7x)/x\n");
 	romberg(G, 0.1, 1.0, 9, R);
 	printf("The third function is P(x) = sqrt(3x+2)\n");
 	romberg(P, 0.0, 1.0, 7, R);
+	*/
 	return 0;
 }
