@@ -86,21 +86,22 @@ int main(int argc, char *argv[])
 	// ------------------------------------------------------------[Init Call]--
 
 	int rounds= (log(world_size)/log(2));
-	int n = 1;
+	int n = 10;
 	int i;
 	double **R;
 
-	double taskA=3.8;
-	double taskB=4.0;
+	double taskA=0.1;
+	double taskB=2;
 	double diffAandB= taskB-taskA;
 	double chunkSizeOfPro = diffAandB / world_size;
 
-	double myA = chunkSizeOfPro * my_rank;
-	double myB = chunkSizeOfPro * (my_rank +1);
+	//start
+	double myA = taskA+( chunkSizeOfPro * my_rank);
+	double myB = taskA+(chunkSizeOfPro * (my_rank +1));
 
 	printf("Me (%d) will calc from (%f) to (%f)\n",my_rank,myA,myB);
 	double resultFunction1 = 100.0;
-	double resultFunction2 = 100.0;
+	double resultFunction2 = 100.0;	
 
 	double F(double), G(double), P(double);
 	R = calloc((n + 1), sizeof(double *));
@@ -147,10 +148,18 @@ int main(int argc, char *argv[])
 
 	
 	// ----------------------------------------------------------[Result Call]--
-	utilOTPrint(0, my_rank,"--------------------- RESULT\n");
 	MPI_Barrier(MPI_COMM_WORLD);
 	usleep(100);
-	printf("[%d] (A)=%f (B)=%f \n", my_rank, resultFunction1, resultFunction2);
+	if(my_rank==0){
+	utilOTPrint(0, my_rank,"--------------------- RESULT\n");
+	printf("boundaries: %f -> %f \n", taskA, taskB);
+	utilOTPrint(0, my_rank,"A:=log(7 * x) / x       | B:=sqrt((3 * x) + 2)\n");
+	printf("\n");
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	usleep(100);
+
+	printf("[Node %d] (A)=%f (B)=%f \n", my_rank, resultFunction1, resultFunction2);
 	/*if (my_rank == 0)
 	{
 		printf("------------------ RESULT -----------\n");
@@ -395,8 +404,7 @@ double G(double x) {
 }
 
 double P(double x) {
-	double xx = (3 * x) + 2;
-	double result = sqrt(xx);
+	double result = sqrt((3 * x) + 2);
 	return result;
 }
 

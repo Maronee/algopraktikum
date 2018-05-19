@@ -95,10 +95,13 @@ int main(void) {
 
 	printf("Romsolo %f \n", rombergSolo);
 	printf("Master Res--- %f + %f = %f \n", rombergF0to1, rombergF1to2, rombergF0to1+ rombergF1to2);
-	/*printf("The second function is G(x) = log(7x)/x\n");
 	romberg(G, 0.1, 1.0, 9, R);
-	printf("The third function is P(x) = sqrt(3x+2)\n");
-	romberg(P, 0.0, 1.0, 7, R);
-	*/
+	double rom1 = romberg(F, 0.1, 2.0, 8, R);
+	double rom2 = romberg(G, 0.1, 2.0, 8, R);
+	double rom3 = romberg(P, 0.1, 2.0, 8, R);
+	printf("The second function is F(x) = as           = %f\n", rom1);
+	printf("The second function is G(x) = log(7x)/x    = %f\n",rom2);
+	printf("The third function is P(x) = sqrt(3x+2)    = %f\n",rom3);
+	/**/
 	return 0;
 }
