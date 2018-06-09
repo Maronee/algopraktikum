@@ -25,12 +25,14 @@
 #include <stdlib.h>
 #include <math.h>
 
-double calc(double* x, double* a, double b, int i){
+double calc(double *x, double *a, double b, int i){
 	int sum1, sum2;
-	int rowcount = sqrt(sizeof(a) / sizeof(double));
+	int rowcount = sizeof(a);
+	printf("row %i, i %i \n", rowcount, i);
+
 	sum1 = 0;
 	sum2 = 0;
-	for(int j = 0; j < i-1; i++){
+	for(int j = 0; j < i; j++){
 		sum1 += a[i*rowcount + j] * x[j];
 	}
 	for(int j = i + 1; j < rowcount; j++){
@@ -85,31 +87,33 @@ int main(int argc, char* argv[ ])
 
 	//init vector x
 	double *vecx = malloc(bcount * sizeof(double));
+	double *vecx_2 = malloc(bcount * sizeof(double));
 	for(int i = 0; i < bcount; i++){
 		vecx[i] = 1;
 	}
 
-	for(int i= 0; i < acount; i++){
+	/*for(int i= 0; i < acount; i++){
 		printf("[%i] a%i%i = %lf \n", my_rank, i / rows, i % rows ,buffer[i]);
-	}
+	}*/
     
 	for(int i= 0; i < bcount; i++){
 		printf("[%i] b%i %lf \n", my_rank, i, bbuffer[i]);
 	}
-
+/*
 	for(int i= 0; i < bcount; i++){
 		printf("[%i] x%i %lf \n", my_rank, i, vecx[i]);
 	}
-
+*/
 	int iteration = 0;
 	int interval = rows / world_size;
-	printf("%i\n", interval);
-	for(int i = 0; i < interval; i++){
-		vecx[interval * my_rank + i] = calc(vecx, buffer, bbuffer[interval * my_rank + i], interval * my_rank + i);
+
+	for(int i = my_rank * interval; i < my_rank*interval + interval; i++){
+				printf("[%i] %lf %i \n", my_rank, bbuffer[i], i);
+		vecx_2[i] = calc(vecx, buffer, bbuffer[i], i);
 	}
 
-	for(int i= 0; i < bcount; i++){
-		printf("[%i] x%i %lf \n", my_rank, i, vecx[i]);
+	for(int i = my_rank * interval; i < my_rank*interval + interval; i++){
+		printf("[%i] x%i %lf \n", my_rank, i, vecx_2[i]);
 	}
 	free(buffer);
 	free(bbuffer);
