@@ -25,20 +25,29 @@
 #include <stdlib.h>
 #include <math.h>
 
-double calc(double *x, double *a, double b, int i){
-	int sum1, sum2;
-	int rowcount = sizeof(a);
-	printf("row %i, i %i \n", rowcount, i);
+double calcCondition(double *x, double *x_1, int size){
+	double sum = 0;
+	for(int i = 0; i < size; i++){
+		sum += fabs(x_1[i] - x[i]);
+	}
+	return sum;
+}
 
-	sum1 = 0;
-	sum2 = 0;
-	for(int j = 0; j < i; j++){
-		sum1 += a[i*rowcount + j] * x[j];
+double calc(double *x, double *a, double b, int i){
+	double sum = 0;
+	int rowcount = sizeof(a);
+/*if(i >3){
+	printf("row %i, b %lf, rowcount %i \n", i, b, rowcount);
+}*/
+//
+	for(int j = 0; j < rowcount; j++){
+		if(j != i){			
+			sum += a[i*rowcount + j] * x[j];
+//			printf("[%i,%i] %lf * %lf = %lf | sum = %lf \n", i,j, a[i*rowcount + j], x[j], a[i*rowcount + j] * x[j], sum);
+		}
 	}
-	for(int j = i + 1; j < rowcount; j++){
-		sum2 += a[i*rowcount + j] * x[j];
-	}
-	return (1/a[i*rowcount+i]) * (b - sum1 - sum2);
+//	printf("[%i] 1/a * (b - sum) = 1 / %lf * ( %lf - %lf ) = %lf \n", i, a[i*rowcount+i], b, sum, (1/a[i*rowcount+i]) * (b - sum));
+	return (1/a[i*rowcount+i]) * (b - sum);
 }
 
 int main(int argc, char* argv[ ]) 
@@ -88,17 +97,22 @@ int main(int argc, char* argv[ ])
 	//init vector x
 	double *vecx = malloc(bcount * sizeof(double));
 	double *vecx_2 = malloc(bcount * sizeof(double));
+	double *bcastBuffer = malloc(bcount * sizeof(double));
+	
 	for(int i = 0; i < bcount; i++){
-		vecx[i] = 1;
+		vecx_2[i] = 1;
 	}
 
-	/*for(int i= 0; i < acount; i++){
+/*	if(my_rank!= 0){
+	for(int i= 0; i < acount; i++){
 		printf("[%i] a%i%i = %lf \n", my_rank, i / rows, i % rows ,buffer[i]);
-	}*/
-    
+	}
+    }
 	for(int i= 0; i < bcount; i++){
 		printf("[%i] b%i %lf \n", my_rank, i, bbuffer[i]);
 	}
+*/
+
 /*
 	for(int i= 0; i < bcount; i++){
 		printf("[%i] x%i %lf \n", my_rank, i, vecx[i]);
@@ -106,17 +120,39 @@ int main(int argc, char* argv[ ])
 */
 	int iteration = 0;
 	int interval = rows / world_size;
+	double diff = 0;
+	do {
+		memcpy(vecx, vecx_2, bcount * sizeof(double));
 
-	for(int i = my_rank * interval; i < my_rank*interval + interval; i++){
-				printf("[%i] %lf %i \n", my_rank, bbuffer[i], i);
-		vecx_2[i] = calc(vecx, buffer, bbuffer[i], i);
-	}
+		for(int i = 0; i < interval; i++){
+			int rowpos = my_rank * interval + i;
+			vecx_2[rowpos] = calc(vecx, buffer, bbuffer[rowpos], i);
+			printf("[%i]result row %i:  %lf \n", my_rank, rowpos, vecx_2[rowpos]);
+		}
+	
+		for(int j = 0; j < world_size; j++){
+			if(j == my_rank){
+				memcpy(bcastBuffer, vecx_2, bcount * sizeof(double));
+			}
+			MPI_Bcast(bcastBuffer, bcount, MPI_DOUBLE, j, MPI_COMM_WORLD);
+			printf( "after broadcast\n");
+			for(int i = j * interval; i < j * interval + interval; i++){
+				//printf("[%i] %lf \n", my_rank, bcastBuffer[i]);
+				vecx_2[i] = bcastBuffer[i];
+			}	
+		}
+	} while(calcCondition(vecx, vecx_2, bcount) > 0.4);
+
+	free(bcastBuffer);
+	free(vecx);
+	free(buffer);
+	free(bbuffer);
 
 	for(int i = my_rank * interval; i < my_rank*interval + interval; i++){
 		printf("[%i] x%i %lf \n", my_rank, i, vecx_2[i]);
 	}
-	free(buffer);
-	free(bbuffer);
+
+	free(vecx_2);
 	MPI_File_close(&filehandle);
     MPI_Finalize();		            // finalizing MPI interface 
 	return 0;						// end of progam with exit code 0 
