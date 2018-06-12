@@ -33,21 +33,24 @@ double calcCondition(double *x, double *x_1, int size){
 	return sum;
 }
 
-double calc(double *x, double *a, double b, int i){
+double calc(double *x, double *a, double b, int i, int actualRow){
 	double sum = 0;
 	int rowcount = sizeof(a);
+	
 /*if(i >3){
 	printf("row %i, b %lf, rowcount %i \n", i, b, rowcount);
 }*/
 //
 	for(int j = 0; j < rowcount; j++){
-		if(j != i){			
-			sum += a[i*rowcount + j] * x[j];
-//			printf("[%i,%i] %lf * %lf = %lf | sum = %lf \n", i,j, a[i*rowcount + j], x[j], a[i*rowcount + j] * x[j], sum);
+		if(j != actualRow){			
+			sum += a[i * rowcount + j] * x[j];
+			//printf("[%i] (%i.%i) \n",actualRow, i, j);
+			//printf("[%i,%i] %lf * %lf = %lf | sum = %lf \n", i,j, a[i*rowcount + j], x[j], a[i*rowcount + j] * x[j], sum);
 		}
 	}
+	//printf("\n");
 //	printf("[%i] 1/a * (b - sum) = 1 / %lf * ( %lf - %lf ) = %lf \n", i, a[i*rowcount+i], b, sum, (1/a[i*rowcount+i]) * (b - sum));
-	return (1/a[i*rowcount+i]) * (b - sum);
+	return (1/a[i * rowcount + actualRow]) * (b - sum);
 }
 
 int main(int argc, char* argv[ ]) 
@@ -122,14 +125,19 @@ int main(int argc, char* argv[ ])
 	int interval = rows / world_size;
 	double diff = 0;
 	do {
+		//iteration++;
 		memcpy(vecx, vecx_2, bcount * sizeof(double));
 
+		/*for(int i = 0; i < bcount; i++){
+			printf("Iteration: %i v%i = %lf \n", iteration, i, vecx[i]);
+		}*/
+		
+		
 		for(int i = 0; i < interval; i++){
 			int rowpos = my_rank * interval + i;
-			vecx_2[rowpos] = calc(vecx, buffer, bbuffer[rowpos], i);
+			vecx_2[rowpos] = calc(vecx, buffer, bbuffer[rowpos], i, rowpos);
 			printf("[%i]result row %i:  %lf \n", my_rank, rowpos, vecx_2[rowpos]);
 		}
-	
 		for(int j = 0; j < world_size; j++){
 			if(j == my_rank){
 				memcpy(bcastBuffer, vecx_2, bcount * sizeof(double));
@@ -141,6 +149,7 @@ int main(int argc, char* argv[ ])
 				vecx_2[i] = bcastBuffer[i];
 			}	
 		}
+		//	if(iteration > 4) { exit(0);}
 	} while(calcCondition(vecx, vecx_2, bcount) > 0.4);
 
 	free(bcastBuffer);
