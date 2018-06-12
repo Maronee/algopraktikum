@@ -123,20 +123,19 @@ int main(int argc, char* argv[ ])
 */
 	int iteration = 0;
 	int interval = rows / world_size;
-	double diff = 0;
+	double *diff = malloc(interval * sizeof(double));
+	double *reduceBuffer = malloc(interval * sizeof(double));
+	double *writeBuffer = malloc(interval * sizeof(double));
+
 	do {
-		//iteration++;
 		memcpy(vecx, vecx_2, bcount * sizeof(double));
 
-		/*for(int i = 0; i < bcount; i++){
-			printf("Iteration: %i v%i = %lf \n", iteration, i, vecx[i]);
-		}*/
-		
-		
 		for(int i = 0; i < interval; i++){
 			int rowpos = my_rank * interval + i;
 			vecx_2[rowpos] = calc(vecx, buffer, bbuffer[rowpos], i, rowpos);
 			printf("[%i]result row %i:  %lf \n", my_rank, rowpos, vecx_2[rowpos]);
+			reduceBuffer[i] = fabs(vecx_2[rowpos] - vecx[rowpos]);
+			writeBuffer[i] = vecx_2[rowpos];
 		}
 		for(int j = 0; j < world_size; j++){
 			if(j == my_rank){
@@ -149,9 +148,13 @@ int main(int argc, char* argv[ ])
 				vecx_2[i] = bcastBuffer[i];
 			}	
 		}
-		//	if(iteration > 4) { exit(0);}
-	} while(calcCondition(vecx, vecx_2, bcount) > 0.4);
 
+		MPI_Allreduce(reduceBuffer, diff, interval, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		
+	} while(diff[0] > 0.4);
+
+	free(diff);
+	free(reduceBuffer);
 	free(bcastBuffer);
 	free(vecx);
 	free(buffer);
@@ -162,6 +165,21 @@ int main(int argc, char* argv[ ])
 	}
 
 	free(vecx_2);
+
+
+		err = MPI_File_open( MPI_COMM_WORLD, "vector_x", MPI_MODE_RDWR | MPI_MODE_CREATE, MPI_INFO_NULL, &filehandle );
+		if (err) {
+			MPI_Abort( MPI_COMM_WORLD, 911 );
+		}
+
+		err = MPI_File_write_ordered( filehandle, writeBuffer, bcount, MPI_INT, MPI_STATUS_IGNORE);
+		if (err) {
+			printf("Error writing to file. \n");
+		}
+		MPI_File_close(&filehandle);
+	
+
+	free(writeBuffer);
 	MPI_File_close(&filehandle);
     MPI_Finalize();		            // finalizing MPI interface 
 	return 0;						// end of progam with exit code 0 
