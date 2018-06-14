@@ -56,131 +56,189 @@ double calc(double *x, double *a, double b, int i, int actualRow){
 int main(int argc, char* argv[ ]) 
 { 
     
-	int my_rank; 					// rank of the process
-	int flag = 0;
-	int world_size;
-	flag=getopt(argc,argv,"h");
-	if (flag !=-1) {
-		printf("Fuehren Sie das Programm mit mpiexec -f <hostfile> -p<Anzahl Prozesse> ./<Programmname> aus, um es auf dem Cluster zu verwenden  \n");
-		exit(0);
-	}
+	int my_rank; 					// rank of the process	
+	int world_size;	
 
 
 	MPI_Init(&argc, &argv);		 	// initializing of MP:I-Interface
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank); 	//get your rank
 
+	double epsilon=0;
+	int flag=0;
+	char *vector_name;
+	char *matrix_name;
+	for (int i=1; i<argc; i++){
+		if (strcmp(argv[i],"-help")==0 && my_rank==0){	
+		printf("Fuehren Sie das Programm mit mpiexec -f <hostfile> -p<Anzahl Prozesse> ./<Programmname> -e <Epsilon> -m <Matrixname> -v <Vektorname> aus, um es auf dem Cluster zu verwenden  \n");
+		exit(0);
+		}
+		if (strcmp(argv[i], "-e")==0){
+			epsilon= atof(argv[i+1]);
+			if (epsilon<0 && my_rank==0){
+			printf("Epsilon muss positiv sein.\n");
+			exit(0);
+			}
+			flag++;
+			}
+		if (strcmp(argv[i], "-m")==0){
+			matrix_name = argv[i+1];
+			flag++;
+			}
+		if (strcmp(argv[i],"-v")==0){
+			vector_name=argv[i+1];
+			flag++;
+			}
+		
+		}
+	if ((my_rank==0) & (flag !=3)){
+	 		printf("Fuehren Sie das Programm mit mpiexec -f <hostfile> -p<Anzahl Prozesse> ./<Programmname> -e <Epsilon> -m <Matrixname> -v <Vektorname> aus, um es auf dem Cluster zu verwenden  \n");
+	
+	}
+
 	MPI_File filehandle;
 	int err;
-	//open matrix a
-	err = MPI_File_open(MPI_COMM_WORLD, "Matrix_A_8x8", MPI_MODE_RDONLY, MPI_INFO_NULL, &filehandle);
-	printf("File open status: %i \n", err);
 	MPI_Offset size;
+	
+	//open matrix a
+	err = MPI_File_open(MPI_COMM_WORLD, matrix_name, MPI_MODE_RDONLY, MPI_INFO_NULL, &filehandle);
+	printf("File open status: %i \n", err);		
 	err = MPI_File_get_size(filehandle, &size);
 	int count_total = size / sizeof(double);
 	int rows = sqrt(count_total);
-	int acount = count_total / world_size;
-
-	printf("Size status: %i , size: %lli , elements: %i, rows: %i\n", err, size, acount, rows);
+	// +2 to leave the last spot for the value of vector b and x -> 
+	// Array is supposed to look like this(Matrix A   | b_i | x_j)
+	int interval = rows / world_size;
+	int scatterCount = (count_total / world_size) + interval;
+	double *scatterMatrix = (double*)malloc(scatterCount * sizeof(double));
+	printf("Size status: %i , size: %lli , elements: %i, rows: %i\n", err, size, count_total, rows);
+	printf("Scatter count: %i \n", scatterCount);
 	
-	double *buffer = (double*) malloc(acount*sizeof(double));
-	MPI_File_read_ordered(filehandle, buffer, acount, MPI_DOUBLE, MPI_STATUS_IGNORE);
+
+	double *aMatrix = (double*) malloc(count_total * sizeof(double));
+	if(my_rank ==  0){
+		MPI_File_read(filehandle, aMatrix, count_total, MPI_DOUBLE, MPI_STATUS_IGNORE);
+	}
 	MPI_File_close(&filehandle);
 
 	//open vector b
-	err = MPI_File_open(MPI_COMM_WORLD, "Vector_b_8x", MPI_MODE_RDONLY, MPI_INFO_NULL, &filehandle);
+	err = MPI_File_open(MPI_COMM_WORLD, vector_name, MPI_MODE_RDONLY, MPI_INFO_NULL, &filehandle);
 	printf("File open status: %i \n", err);
 
 	err = MPI_File_get_size(filehandle, &size);
 	int bcount = (size / sizeof(double));
-	double *bbuffer = malloc(bcount * sizeof(double));
-	MPI_File_read(filehandle, bbuffer, bcount, MPI_DOUBLE, MPI_STATUS_IGNORE);
-	MPI_File_close(&filehandle);
+	double *bVec = malloc(bcount * sizeof(double));
 
-	//init vector x
-	double *vecx = malloc(bcount * sizeof(double));
-	double *vecx_2 = malloc(bcount * sizeof(double));
-	double *bcastBuffer = malloc(bcount * sizeof(double));
+	if(my_rank == 0) {	
+		MPI_File_read(filehandle, bVec, bcount, MPI_DOUBLE, MPI_STATUS_IGNORE);
+	}
 	
-	for(int i = 0; i < bcount; i++){
-		vecx_2[i] = 1;
-	}
-
-/*	if(my_rank!= 0){
-	for(int i= 0; i < acount; i++){
-		printf("[%i] a%i%i = %lf \n", my_rank, i / rows, i % rows ,buffer[i]);
-	}
-    }
-	for(int i= 0; i < bcount; i++){
-		printf("[%i] b%i %lf \n", my_rank, i, bbuffer[i]);
-	}
-*/
-
-/*
-	for(int i= 0; i < bcount; i++){
-		printf("[%i] x%i %lf \n", my_rank, i, vecx[i]);
-	}
-*/
-	int iteration = 0;
-	int interval = rows / world_size;
-	double *diff = malloc(interval * sizeof(double));
-	double *reduceBuffer = malloc(interval * sizeof(double));
-	double *writeBuffer = malloc(interval * sizeof(double));
-
-	do {
-		memcpy(vecx, vecx_2, bcount * sizeof(double));
-
-		for(int i = 0; i < interval; i++){
-			int rowpos = my_rank * interval + i;
-			vecx_2[rowpos] = calc(vecx, buffer, bbuffer[rowpos], i, rowpos);
-			printf("[%i]result row %i:  %lf \n", my_rank, rowpos, vecx_2[rowpos]);
-			reduceBuffer[i] = fabs(vecx_2[rowpos] - vecx[rowpos]);
-			writeBuffer[i] = vecx_2[rowpos];
-		}
-		for(int j = 0; j < world_size; j++){
-			if(j == my_rank){
-				memcpy(bcastBuffer, vecx_2, bcount * sizeof(double));
-			}
-			MPI_Bcast(bcastBuffer, bcount, MPI_DOUBLE, j, MPI_COMM_WORLD);
-			printf( "after broadcast\n");
-			for(int i = j * interval; i < j * interval + interval; i++){
-				//printf("[%i] %lf \n", my_rank, bcastBuffer[i]);
-				vecx_2[i] = bcastBuffer[i];
-			}	
-		}
-
-		MPI_Allreduce(reduceBuffer, diff, interval, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	MPI_File_close(&filehandle);
+	
+	double *transform = (double*) malloc((count_total + rows) * sizeof(double));
+	if(my_rank == 0) {
 		
-	} while(diff[0] > 0.4);
+		int count = 0;
+		for(int i = 0; i < rows; i++){
+			for(int j = 0; j < rows; j++){
+				transform[i * rows + j + i] = aMatrix[j * rows + i];
+				count++;
+				//printf("%i a(%i,%i) = %lf\n",i * rows + j + i,  i, j, transform[i * rows + j + i]);
+			}			
+			transform[i * rows + rows + i] = bVec[i];
+			count++;
+			//printf("%i a(%i,%i) = %lf = b \n",i * rows + rows + i, i ,rows , transform[i * rows + rows + i]);
+		}
+		//printf("%i\n", scatterCount);
+	}
+	MPI_Scatter(transform, scatterCount, MPI_DOUBLE, scatterMatrix, scatterCount, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	
+	free(aMatrix);
+	free(bVec);
+	free(transform);
 
-	free(diff);
-	free(reduceBuffer);
-	free(bcastBuffer);
-	free(vecx);
-	free(buffer);
-	free(bbuffer);
-
-	for(int i = my_rank * interval; i < my_rank*interval + interval; i++){
-		printf("[%i] x%i %lf \n", my_rank, i, vecx_2[i]);
+	double sum, diff, diffTotal, local_sum;
+	double *vecx = (double*) malloc(interval * sizeof(double));
+	double *vecx_2 = (double*) malloc(interval * sizeof(double));
+	//printf("I get here %i \n", my_rank);
+	//double *local_sum = (double*)malloc(interval * sizeof(double));
+	//init value	
+	for(int i = 0; i < interval; i++){
+		vecx_2[i] = 1.0;
+	//	local_sum[i] = 0;
 	}
 
-	free(vecx_2);
+	local_sum = 0;
+	/*for(int i = 0; i < scatterCount; i++){
+		printf("[%i] a(%i) = %lf\n", my_rank, i + my_rank * scatterCount, scatterMatrix[i]);
+	}*/
 
-
-		err = MPI_File_open( MPI_COMM_WORLD, "vector_x", MPI_MODE_RDWR | MPI_MODE_CREATE, MPI_INFO_NULL, &filehandle );
-		if (err) {
-			MPI_Abort( MPI_COMM_WORLD, 911 );
-		}
-
-		err = MPI_File_write_ordered( filehandle, writeBuffer, bcount, MPI_INT, MPI_STATUS_IGNORE);
-		if (err) {
-			printf("Error writing to file. \n");
-		}
-		MPI_File_close(&filehandle);
+	//MPI_Barrier(MPI_COMM_WORLD);
 	
+	do{
+		memcpy(vecx, vecx_2, interval * sizeof(double));
+		
+		diff = 0;		
+		
+		for(int i = 0; i < rows; i++){	
+			int procIndex = i - my_rank * interval;
+			int sumIndex = i % interval;
+			//summe ueber matrix  bilden
+			for(int j = 0; j < interval; j++){
+				if(i != (j + interval*my_rank)){
+					local_sum += scatterMatrix[j * (rows + 1) + sumIndex] * vecx[j];
+					//printf("[%i] %i,%i, array index %i, %lf, sum = %lf \n", my_rank, j, i, j * (rows + 1) + sumIndex, scatterMatrix[j * (rows + 1) + sumIndex], local_sum);
+					printf("%i,%i val %lf \n", i, j , scatterMatrix[j * (rows + 1) + sumIndex]);
+				}
+			}
 
-	free(writeBuffer);
-	MPI_File_close(&filehandle);
+			//berechnung von jacobi fuer x[i]
+			if(i / interval == my_rank){
+				//printf("[%i] row %i head honcho\n", my_rank, i);
+				MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE, MPI_SUM, my_rank, MPI_COMM_WORLD);				
+				vecx_2[procIndex] = (1/scatterMatrix[procIndex * rows + i + procIndex]) * (scatterMatrix[procIndex * rows + rows + procIndex] - sum);
+				//printf("[%i] row %i -> vecx_2[%i] , rowcount %i, diagonal index %i, b index %i, do I understand indices?\n", my_rank,i, i - my_rank * interval, rows, procIndex * rows + i + procIndex, procIndex * rows + rows + procIndex);
+				//printf("[%i] row %i -> vecx_2[%i] , rowcount %i, diagonal index %i, b index %i, do I understand indices?\n", my_rank,i, i - my_rank * interval, rows, i * rows + i + i, i * rows + rows + i);
+				//printf("[%i] vecx %lf vecx 2 %lf   diff = %lf\n", i, vecx[procIndex], vecx_2[procIndex], fabs(vecx_2[procIndex] - vecx[procIndex]));
+				//printf("[%i] 1 / %lf * ( %lf - %lf ) = %lf \n", i, scatterMatrix[procIndex * rows + i + procIndex], scatterMatrix[procIndex * rows + rows + procIndex], sum, vecx_2[procIndex]);
+				diff += fabs(vecx_2[procIndex] - vecx[procIndex]);		
+			}else{
+				MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE, MPI_SUM, i / interval, MPI_COMM_WORLD);
+			}
+			local_sum = 0;
+			sum = 0;		
+		}
+		//differenz berechnung ueber map reduce
+		//printf("[%i] diff %lf\n", my_rank, diff);
+		MPI_Allreduce(&diff, &diffTotal, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		exit(0);
+		//printf("[%i] difftotal %lf\n", my_rank, diffTotal);
+		
+	}while(diffTotal > epsilon);
+	/*	
+	for(int i = 0; i < interval; i++){
+		printf("[%i] Result: x[%i] = %lf\n", my_rank, i + my_rank*interval, vecx_2[i]);
+	}
+	*/
+
+	double *result = (double*) malloc(rows * sizeof(double));
+	MPI_Gather(vecx_2, interval, MPI_DOUBLE, result, interval, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	if(my_rank == 0){
+		printf("Gather receive:\n");
+		for(int i = 0; i < rows; i++){
+			printf("x[%i] = %lf\n", i, result[i]);	
+		}
+	}
+
+	MPI_File fh;
+	MPI_File_open(MPI_COMM_WORLD, "vecx_result",MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
+
+	err= MPI_File_write(fh, vecx_2, rows, MPI_DOUBLE, MPI_STATUS_IGNORE);
+	MPI_File_close(&fh);
+	
+	free(vecx);
+	free(vecx_2);
+	//free(transform); // so late because earlier it fails x_x
     MPI_Finalize();		            // finalizing MPI interface 
 	return 0;						// end of progam with exit code 0 
 }
