@@ -72,6 +72,7 @@ int main(int argc, char* argv[ ])
 	int count_total =size;
 	int columns = 1280;
 	int rows= 960;
+	int my_rows = rows / world_size;
 	int my_count = count_total / world_size;
 
 	//int count=rows;
@@ -230,7 +231,6 @@ int main(int argc, char* argv[ ])
 	err = MPI_Recv_init(recvTop, columns * 2, MPI_DOUBLE, left, 0, My_Comm, &rrr[3]);
 
 	//calculations
-	int rowInterval = rows / world_size;
 	for(int k = 0; k < m; k++){
 		//prereq
 		memcpy(result_buffer, calc_buffer, my_count * sizeof(double));
@@ -245,7 +245,7 @@ int main(int argc, char* argv[ ])
 
 		for(int i = 0; i < 2 * columns; i++){
 			if(my_rank != world_size - 1){
-				botRow[i] = result_buffer[(rowInterval - 2) * columns + i];
+				botRow[i] = result_buffer[(my_rows - 2) * columns + i];
 			} else {
 				botRow[i] = 0;
 			}
@@ -256,8 +256,10 @@ int main(int argc, char* argv[ ])
 		MPI_Waitall(4, rrr, MPI_STATUS_IGNORE);
 
 		if(debug == 1){
-			printf("[%i] local top %lf recv top %lf\n", my_rank, topRow[1], recvTop[1]);
-			printf("[%i] local bot %lf recv bot %lf\n", my_rank, botRow[1], recvBot[1]);
+			printf("[%i] local 0,1 top %lf recv top %lf\n", my_rank, topRow[1], recvTop[1]);
+			printf("[%i] local 1,1 top %lf recv top %lf\n", my_rank, topRow[1 * columns + 1], recvTop[1 * columns + 1]);
+			printf("[%i] local 0,1 bot %lf recv bot %lf\n", my_rank, botRow[1], recvBot[1]);
+			printf("[%i] local 1,1 bot %lf recv bot %lf\n", my_rank, botRow[1 * columns + 1], recvBot[1 * columns + 1]);
 		}
 
 		if(right != -1){
@@ -266,7 +268,7 @@ int main(int argc, char* argv[ ])
 		if(left != -1){
 			memcpy(topRow, recvTop, 2 * columns * sizeof(double));
 		}
-
+		
 		for(int i = 0; i < my_count; i++){
 			double sum = 0;
 			for(int u = 0; u < 5; u++){
@@ -275,41 +277,50 @@ int main(int argc, char* argv[ ])
 					// u-2 und v-2 sind zur verschiebung gedacht, somit ist 2,2 die mitte der matrix
 					int col_index = i % columns + v - 2;
 					int row_index = i / columns + u - 2;
-
+					double array_val, filter_val;
+					int arrayindex;
 					// alle werte ausserhalb des array sind 0 und ergeben im produkt 0
-					if(col_index >= 0 && row_index >= 0){
-
-						int arrayindex = row_index * columns + col_index;
-						switch(choice){
-							case 0:
-								sum += blur[filterindex] * result_buffer[arrayindex];
-								if(debug){
-									printf("[%i] col = %i, row %i, u = %i, v = %i blur[%i] * buf[%i] = %lf * %lf\n", my_rank, col_index, row_index, u, v, filterindex, arrayindex, blur[filterindex], result_buffer[arrayindex]);
-								}
-								break;
-							case 1:
-								sum += sharpen[filterindex] * result_buffer[arrayindex];
-								if(debug){
-									printf("[%i] col = %i, row %i, u = %i, v = %i sharpen[%i] * buf[%i] = %lf * %lf\n", my_rank, col_index, row_index, u, v, filterindex, arrayindex, sharpen[filterindex], result_buffer[arrayindex]);
-								}
-								break;
-							case 2:
-								sum += relief[filterindex] * result_buffer[arrayindex];
-								if(debug){
-									printf("[%i] col = %i, row %i, u = %i, v = %i relief[%i] * buf[%i] = %lf * %lf\n", my_rank, col_index, row_index, u, v, filterindex, arrayindex, relief[filterindex], result_buffer[arrayindex]);
-								}
-								break;
-							case 3:
-								sum += edge[filterindex] * result_buffer[arrayindex];
-								if(debug){
-									printf("[%i] col = %i, row %i, u = %i, v = %i edge[%i] * buf[%i] = %lf * %lf\n", my_rank, col_index, row_index, u, v, filterindex, arrayindex, edge[filterindex], result_buffer[arrayindex]);
-								}
-								break;
-						}
+					//if(col_index >= 0 && row_index >= 0){
+					if( col_index >= 0 && col_index < columns && row_index < 0 ){
+						arrayindex = (row_index + 2) * columns + col_index;
+						array_val = topRow[arrayindex];
+						// if(i == arrayindex && debug == 1){
+						// 	printf(" (%i,%i) \n", row_index + 2, col_index);
+						// }
+						
 					}
+					else if( col_index >= 0 && col_index < columns && row_index >= my_rows ){
+						arrayindex = (row_index - my_rows) * columns + col_index;
+						array_val = botRow[arrayindex];
+						// if(i == row_index * columns + col_index - 2 * columns  && debug == 1){
+						// 	printf(" (%i,%i) \n", row_index - my_rows, col_index);
+						// }
+						//printf("%i %i \n", col_index, row_index);
+					}
+					else if( col_index >= 0 && col_index < columns && row_index >= 0 && row_index < my_rows){
+						arrayindex = row_index * columns + col_index;
+						array_val = result_buffer[arrayindex];
+					}
+
+					switch(choice){
+						case 0:
+							filter_val = blur[filterindex];
+							break;
+						case 1:
+							filter_val = sharpen[filterindex];
+							break;
+						case 2:
+							filter_val = relief[filterindex];
+							break;
+						case 3:							
+							filter_val = edge[filterindex];							
+							break;
+					}
+
+					sum += filter_val * array_val;
 				}
 			}
-
+			
 			//printf("[%i] sum before %lf\n", my_rank, sum);
 
 			if(sum < 0){
